@@ -26,7 +26,7 @@ def test_adjust_wages():
     f.adjust_wages()
 
     # test firm 1: vacancy-free for more than gamma months
-    # - wage was decreases
+    # - wage was decreased
     assert f.w[0] < w_old[0]
     # - wage decrease was less than delta %
     assert f.w[0] >= (w_old[0] * (1-f.delta[0]))
