@@ -31,13 +31,13 @@ class Firms:
         '''
         See section 2.2 of [Lengnick 2012] for details:
 
-        - Increase wage if vacancy was not filled during prevous month
+        - Increase wage if vacancy was not filled during previous month
           condition: (v > 0)
         - Decrease wage if no vacancies for last gamma months
           condition: (nv > g)
         - Randomly select wage change with upper limit equal to delta
           np.random.uniform(0, delta, F)
-        - Deteremine direction of wage change:
+        - Deteremine direction of wage change (increase or decrease):
           ((v > 0) * 1) + ((nv > g) * -1)
         '''
 
