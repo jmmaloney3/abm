@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "abm"
+version = "0.0.1"
+authors = [
+  { name="John Maloney" },
+]
+description = "Source code for various agent-based macroeconomics simulations."
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/jmmaloney3/abm"
+Issues = "https://github.com/jmmaloney3/abm/issues"
