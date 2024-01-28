@@ -17,6 +17,10 @@ class Firms:
         self.i_phi_upper = np.full(self.F, 1)  # [Lengnick 2013] sets this to 1
         # firm inventory lower bound - percentage of previous demand
         self.i_phi_lower = np.full(self.F, 0.25)  # [Lengnick 2013] sets this to 0.25
+        # firm price upper bound - percentage of previous demand
+        self.p_phi_upper = np.full(self.F, 1.15)  # [Lengnick 2013] sets this to 1.15
+        # firm price lower bound - percentage of previous demand
+        self.p_phi_lower = np.full(self.F, 1.025)  # [Lengnick 2013] sets this to 1.025
 
         # initial conditions (TBD)
         # firm liquidity (m_f) - current "bank account" balance
@@ -29,8 +33,8 @@ class Firms:
         self.w = np.ones(self.F) # wage set to 1 at start (?)
         # firm price (p_f) - current price
         self.p = np.ones(self.F) # price set to 1 at start (?)
-        # firm employees - number of households currently employed by each firm
-        self.e = np.ones(self.F) # employees set to 1 at start (?)
+        # firm labor (l_f) - number of households currently employed by each firm
+        self.l = np.ones(self.F) # employees set to 1 at start (?)
         # firm vacancies - current open positions
         self.v = np.ones(self.F) # every firm has a vacancy at start
         # firm number of months without vacancy
@@ -72,4 +76,4 @@ class Firms:
         # fire employees
         # - each firm can fire at most 1 employee
         # - make sure employment is not less than zero (or one?)
-        self.e = np.clip(self.e - ((self.i > (self.i_phi_upper * self.d)) * 1), 0, None)
+        self.l = np.clip(self.l - ((self.i > (self.i_phi_upper * self.d)) * 1), 0, None)

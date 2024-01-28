@@ -70,10 +70,10 @@ def test_adjust_workforce():
     f.v = np.array([0, 1, 0, 2, 0, 0, 1])
 
     # configure workforce sizes
-    f.e = np.array([0, 1, 2, 3, 4, 5, 6])
+    f.l = np.array([0, 1, 2, 3, 4, 5, 6])
 
-    # save current employment for comparison
-    e_old = f.e
+    # save current workforce sizes for comparison
+    l_old = f.l
 
     # save current vacancies for comparison
     v_old = f.v
@@ -83,47 +83,47 @@ def test_adjust_workforce():
 
     # test firm 1: inventory above upper limit but workforce min size
     # - workforce remained unchanged at zero
-    assert f.e[0] == e_old[0]
-    assert f.e[0] == 0
+    assert f.l[0] == l_old[0]
+    assert f.l[0] == 0
     # - no vacancies
     assert f.v[0] == 0
 
     # test firm 2: inventory above upper limit
     # - workforce size is one less
-    assert f.e[1] == (e_old[1] - 1)
+    assert f.l[1] == (l_old[1] - 1)
     # - workforce size is >= workforce min size
-    assert f.e[1] >= 0
+    assert f.l[1] >= 0
     # - no vacancies exist
     assert f.v[1] == 0
 
     # test firm 3: inventory equal to upper limit
     # - workforce size is unchanged
-    assert f.e[2] == e_old[2]
+    assert f.l[2] == l_old[2]
     # - no vacancies exist
     assert f.v[2] == 0
 
     # test firm 4: inventory between limits
     # - workforce size is unchanged
-    assert f.e[3] == e_old[3]
+    assert f.l[3] == l_old[3]
     # - no vacancies exist
     assert f.v[3] == 0
 
     # test firm 5: inventory equal to lower limit
     # - workforce size is unchanged
-    assert f.e[4] == e_old[4]
+    assert f.l[4] == l_old[4]
     # - no vacancies exist
     assert f.v[4] == 0
 
     # test firm 6: inventory below lower limit w/no pre-existing vacancy
     # - workforce size is unchanged
-    assert f.e[5] == e_old[5]
+    assert f.l[5] == l_old[5]
     # - one new vacancy exists
     assert v_old[5] == 0 # validate test data
     assert f.v[5] == 1
 
     # test firm 7: inventory below lower limit w/pre-existing vacancy
     # - workforce size is unchanged
-    assert f.e[6] == e_old[6]
+    assert f.l[6] == l_old[6]
     # - previously existing vacancy still exists
     assert v_old[6] == 1 # validate test data
     assert f.v[6] == 1
