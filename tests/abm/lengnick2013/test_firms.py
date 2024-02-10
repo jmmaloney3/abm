@@ -139,7 +139,7 @@ def test_adjust_prices():
     # ---- ---------------  ----------------  -----------
     #  1a    i < lb < ub      p < lb < ub         lb
     #  1b    i < lb < ub      lb = p < ub         lb
-    #  1c    i < lb < ub      lb < p < ub         p
+    #  1c    i < lb < ub      lb < p < ub      old_p < p
     #  1d    i < lb < ub      lb < p = ub         ub
     #  1e    i < lb < ub      lb < ub < p         ub
     #
@@ -163,12 +163,19 @@ def test_adjust_prices():
     #
     #  5a    lb < ub < i      p < lb < ub         lb
     #  5b    lb < ub < i      lb = p < ub         lb
-    #  5c    lb < ub < i      lb < p < ub         p
+    #  5c    lb < ub < i      lb < p < ub      p < old_p
     #  5d    lb < ub < i      lb < p = ub         ub
     #  5e    lb < ub < i      lb < ub < p         ub
+    #
+    # For case 6, theta is set to zero so that the price change
+    # is not accepted.
+    #
+    #  6a    i < lb < ub      lb < p < ub      old_p == p
+    #  6b    lb < ub < i      lb < p < ub      old_p == p
 
     # initialize firms
-    f = firms.Firms(25)
+    N = 27
+    f = firms.Firms(N)
 
     # configure constant parameters for the test firms
     # - configure current inventory
@@ -182,9 +189,6 @@ def test_adjust_prices():
     # - configure current price (equal to marginal cost)
     mc = f.w * f.t_lambda
     f.p = np.full(f.F, mc)
-    # set price change probability to one
-    # - so that price changes are always accepted
-    f.theta = np.full(f.F, 1.0)
 
     # initialize inventory bounds factors
     i_lower = [1.1, 1.0, 0.9, 0.8, 0.7]
@@ -194,14 +198,18 @@ def test_adjust_prices():
     p_lower = [1.1, 1.0, 0.9, 0.8, 0.7]
     p_upper = [1.3, 1.2, 1.1, 1.0, 0.9]
 
-    # initialize price change factors(nu)
+    # initialize price change factors (nu)
     p_nu = [0.1, 0.0, 0.1, 0.0, 0.1]
 
     # configure variable parameters for the test firms
-    for x in range(25):
+    for x in range(N):
         # configure inventory bounds factors:
-        f.i_phi_lower[x] = i_lower[x//5]
-        f.i_phi_upper[x] = i_upper[x//5]
+        if (x//5 < 5):
+            f.i_phi_lower[x] = i_lower[x//5]
+            f.i_phi_upper[x] = i_upper[x//5]
+        else: # (x//5 == 5) - cases 6a & 6b (firms 25 & 26)
+            f.i_phi_lower[x] = i_lower[(x%5) * 4] # (25%5 == 0), (26%5 == 1)
+            f.i_phi_upper[x] = i_upper[(x%5) * 4]
 
         # test inventory bounds
         if (x//5 == 0):
@@ -212,33 +220,53 @@ def test_adjust_prices():
             assert (f.i_phi_lower[x]*f.d[x] < f.i[x])  and (f.i[x] < f.i_phi_upper[x]*f.d[x])
         elif (x//5 == 3):
             assert (f.i_phi_lower[x]*f.d[x] < f.i[x])  and (f.i[x] == f.i_phi_upper[x]*f.d[x])
-        else: # (x//5 == 4)
+        elif (x//5 == 4):
             assert (f.i_phi_lower[x]*f.d[x] < f.i[x])  and (f.i_phi_upper[x]*f.d[x] < f.i[x])
+        else: # (x//5 == 5) - cases 6a & 6b (firms 25 & 26)
+            if (x == f.F-2): # firm 25
+                assert (f.i[x] < f.i_phi_lower[x]*f.d[x])  and (f.i_phi_lower[x]*f.d[x] < f.i_phi_upper[x]*f.d[x])
+            else: # firm 26
+                assert (f.i_phi_lower[x]*f.d[x] < f.i[x])  and (f.i_phi_upper[x]*f.d[x] < f.i[x])
 
         # configure price bounds factors
-        f.p_phi_lower[x] = p_lower[x%5]
-        f.p_phi_upper[x] = p_upper[x%5]
+        if (x//5 < 5):
+            f.p_phi_lower[x] = p_lower[x%5]
+            f.p_phi_upper[x] = p_upper[x%5]
+        else: # (x//5 == 5) - cases 6a & 6b (firms 25 & 26)
+            f.p_phi_lower[x] = p_lower[2]
+            f.p_phi_upper[x] = p_upper[2]
 
         # test price bounds
-        if (x%5 == 0):
+        if (x%5 == 0) and (x//5 < 5): # don't include cases 6a & 6b
             assert (f.p[x] < f.p_phi_lower[x]*mc[x])  and (f.p_phi_lower[x]*mc[x] < f.p_phi_upper[x]*mc[x])
-        elif (x%5 == 1):
+        elif (x%5 == 1) and (x//5 < 5): # don't include cases 6a & 6b
             assert (f.p_phi_lower[x]*mc[x] == f.p[x]) and (f.p[x] < f.p_phi_upper[x]*mc[x])
-        elif (x%5 == 2):
+        elif (x%5 == 2) or (x//5 == 5):  # include cases 6a & 6b
             assert (f.p_phi_lower[x]*mc[x] < f.p[x])  and (f.p[x] < f.p_phi_upper[x]*mc[x])
         elif (x%5 == 3):
             assert (f.p_phi_lower[x]*mc[x] < f.p[x])  and (f.p[x] == f.p_phi_upper[x]*mc[x])
-        else: # (x%5 == 4):
+        else: # (x%5 == 4)
             assert (f.p_phi_lower[x]*mc[x] < f.p[x])  and (f.p_phi_upper[x]*mc[x] < f.p[x])
 
         # configure price change factor
-        f.nu[x] = p_nu[x%5]
+        if (x//5 < 5):
+            f.nu[x] = p_nu[x%5]
+        else:  # (x//5 == 5) - cases 6a & 6b (firms 25 & 26)
+            f.nu[x] = p_nu[2]
 
         # test price change factor
-        if (x%5 == 0) or (x%5 == 2) or (x%5 == 4):
+        if (x%5 in (0, 2, 4)) or (x//5 == 5): # include cases 6a & 6b
             assert f.p[x] < (f.p[x] + np.random.uniform(0, f.nu[x]))
-        else:
+        else: # (x%5 in (1, 3)):
             assert f.p[x] == (f.p[x] + np.random.uniform(0, f.nu[x]))
+
+        # configure price change probability
+        if (x//5 < 5):
+            # - set to 1.0 so price always changes
+            f.theta[x] = 1.0
+        else: # (x//5 == 5) - cases 6a & 6b (firms 25 & 26)
+            # - set to 0.0 so price never changes
+            f.theta[x] = 0.0
 
     # save old prices
     old_p = f.p
@@ -246,14 +274,22 @@ def test_adjust_prices():
     # test adjust_prices()
     f.adjust_prices()
 
-    # evaluate result\
+    # calculate bounds - for use in result evaluation
     p_lower_bound = f.p_phi_lower*mc
     p_upper_bound = f.p_phi_upper*mc
 
-    assert f.p[0] == p_lower_bound[0]
-    assert f.p[1] == p_lower_bound[1]
-    assert (p_lower_bound[2] < f.p[2]) and (f.p[2] > old_p[2]) and (f.p[2] < p_upper_bound[2])
-    assert f.p[3] == p_upper_bound[3]
-    assert f.p[4] == p_upper_bound[4]
-
-    # TODO: complete test case
+    # evaluate result
+    for x in range(N):
+        if (x//5 in (1, 2, 3, 5)): # price doesn't change
+            assert f.p[x] == old_p[x]
+        else: # (x//5 in (0, 4))
+            if (x%5 in (0, 1)):
+                assert (f.p[x] == p_lower_bound[x])
+            elif (x%5 == 2):
+                assert (p_lower_bound[x] < f.p[x]) and (f.p[x] < p_upper_bound[x])
+                if (x//5 == 0):
+                    assert (old_p[x] < f.p[x])
+                else: # (x//5 == 4)
+                    assert (f.p[x] < old_p[x])
+            else: # (x%5 in (3, 4))
+                assert f.p[3] == p_upper_bound[3]
