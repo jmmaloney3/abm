@@ -127,3 +127,133 @@ def test_adjust_workforce():
     # - previously existing vacancy still exists
     assert v_old[6] == 1 # validate test data
     assert f.v[6] == 1
+
+def test_adjust_prices():
+
+    # Test Cases:
+    #
+    # Unless noted otherwise, for the following test cases,
+    # theta is set to 1.0 to ensure that price change occurs
+    #
+    # Case    Inventory     Calculated Price   New Price
+    # ---- ---------------  ----------------  -----------
+    #  1a    i < lb < ub      p < lb < ub         lb
+    #  1b    i < lb < ub      lb = p < ub         lb
+    #  1c    i < lb < ub      lb < p < ub         p
+    #  1d    i < lb < ub      lb < p = ub         ub
+    #  1e    i < lb < ub      lb < ub < p         ub
+    #
+    #  2a    lb = i < ub      p < lb < ub      no change
+    #  2b    lb = i < ub      lb = p < ub      no change
+    #  2c    lb = i < ub      lb < p < ub      no change
+    #  2d    lb = i < ub      lb < p = ub      no change
+    #  2e    lb = i < ub      lb < ub < p      no change
+    #
+    #  3a    lb < i < ub      p < lb < ub      no change
+    #  3b    lb < i < ub      lb = p < ub      no change
+    #  3c    lb < i < ub      lb < p < ub      no change
+    #  3d    lb < i < ub      lb < p = ub      no change
+    #  3e    lb < i < ub      lb < ub < p      no change
+    #
+    #  4a    lb < i = ub      p < lb < ub      no change
+    #  4b    lb < i = ub      lb = p < ub      no change
+    #  4c    lb < i = ub      lb < p < ub      no change
+    #  4d    lb < i = ub      lb < p = ub      no change
+    #  4e    lb < i = ub      lb < ub < p      no change
+    #
+    #  5a    lb < ub < i      p < lb < ub         lb
+    #  5b    lb < ub < i      lb = p < ub         lb
+    #  5c    lb < ub < i      lb < p < ub         p
+    #  5d    lb < ub < i      lb < p = ub         ub
+    #  5e    lb < ub < i      lb < ub < p         ub
+
+    # initialize firms
+    f = firms.Firms(25)
+
+    # configure constant parameters for the test firms
+    # - configure current inventory
+    f.i = np.full(f.F, 5)
+    # - configure previous month demand
+    f.d = np.full(f.F, 5)
+    # - configure current wages
+    f.w = np.full(f.F, 5)
+    # - configure worker productivity (t_lambda)
+    f.t_lambda = np.full(f.F, 1)
+    # - configure current price (equal to marginal cost)
+    mc = f.w * f.t_lambda
+    f.p = np.full(f.F, mc)
+    # set price change probability to one
+    # - so that price changes are always accepted
+    f.theta = np.full(f.F, 1.0)
+
+    # initialize inventory bounds factors
+    i_lower = [1.1, 1.0, 0.9, 0.8, 0.7]
+    i_upper = [1.3, 1.2, 1.1, 1.0, 0.9]
+
+    # initialize price bounds factors
+    p_lower = [1.1, 1.0, 0.9, 0.8, 0.7]
+    p_upper = [1.3, 1.2, 1.1, 1.0, 0.9]
+
+    # initialize price change factors(nu)
+    p_nu = [0.1, 0.0, 0.1, 0.0, 0.1]
+
+    # configure variable parameters for the test firms
+    for x in range(25):
+        # configure inventory bounds factors:
+        f.i_phi_lower[x] = i_lower[x//5]
+        f.i_phi_upper[x] = i_upper[x//5]
+
+        # test inventory bounds
+        if (x//5 == 0):
+            assert (f.i[x] < f.i_phi_lower[x]*f.d[x])  and (f.i_phi_lower[x]*f.d[x] < f.i_phi_upper[x]*f.d[x])
+        elif (x//5 == 1):
+            assert (f.i_phi_lower[x]*f.d[x] == f.i[x]) and (f.i[x] < f.i_phi_upper[x]*f.d[x])
+        elif (x//5 == 2):
+            assert (f.i_phi_lower[x]*f.d[x] < f.i[x])  and (f.i[x] < f.i_phi_upper[x]*f.d[x])
+        elif (x//5 == 3):
+            assert (f.i_phi_lower[x]*f.d[x] < f.i[x])  and (f.i[x] == f.i_phi_upper[x]*f.d[x])
+        else: # (x//5 == 4)
+            assert (f.i_phi_lower[x]*f.d[x] < f.i[x])  and (f.i_phi_upper[x]*f.d[x] < f.i[x])
+
+        # configure price bounds factors
+        f.p_phi_lower[x] = p_lower[x%5]
+        f.p_phi_upper[x] = p_upper[x%5]
+
+        # test price bounds
+        if (x%5 == 0):
+            assert (f.p[x] < f.p_phi_lower[x]*mc[x])  and (f.p_phi_lower[x]*mc[x] < f.p_phi_upper[x]*mc[x])
+        elif (x%5 == 1):
+            assert (f.p_phi_lower[x]*mc[x] == f.p[x]) and (f.p[x] < f.p_phi_upper[x]*mc[x])
+        elif (x%5 == 2):
+            assert (f.p_phi_lower[x]*mc[x] < f.p[x])  and (f.p[x] < f.p_phi_upper[x]*mc[x])
+        elif (x%5 == 3):
+            assert (f.p_phi_lower[x]*mc[x] < f.p[x])  and (f.p[x] == f.p_phi_upper[x]*mc[x])
+        else: # (x%5 == 4):
+            assert (f.p_phi_lower[x]*mc[x] < f.p[x])  and (f.p_phi_upper[x]*mc[x] < f.p[x])
+
+        # configure price change factor
+        f.nu[x] = p_nu[x%5]
+
+        # test price change factor
+        if (x%5 == 0) or (x%5 == 2) or (x%5 == 4):
+            assert f.p[x] < (f.p[x] + np.random.uniform(0, f.nu[x]))
+        else:
+            assert f.p[x] == (f.p[x] + np.random.uniform(0, f.nu[x]))
+
+    # save old prices
+    old_p = f.p
+
+    # test adjust_prices()
+    f.adjust_prices()
+
+    # evaluate result\
+    p_lower_bound = f.p_phi_lower*mc
+    p_upper_bound = f.p_phi_upper*mc
+
+    assert f.p[0] == p_lower_bound[0]
+    assert f.p[1] == p_lower_bound[1]
+    assert (p_lower_bound[2] < f.p[2]) and (f.p[2] > old_p[2]) and (f.p[2] < p_upper_bound[2])
+    assert f.p[3] == p_upper_bound[3]
+    assert f.p[4] == p_upper_bound[4]
+
+    # TODO: complete test case

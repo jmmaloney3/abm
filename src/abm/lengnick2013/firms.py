@@ -11,16 +11,22 @@ class Firms:
         # - See [Lengnick 2013] Table 1:
         # firm number of vacancy-free months before reducing wage rate (gamma_f)
         self.gamma = np.full(self.F, 24) # [Lengnick 2013] sets this to 24
-        # firm wage % change upper bound (delta_f)
+        # firm wage max % change (delta_f)
         self.delta = np.full(self.F,0.019) # [Lengnick 2013] sets this to 0.019
         # firm inventory upper bound - percentage of previous demand
-        self.i_phi_upper = np.full(self.F, 1)  # [Lengnick 2013] sets this to 1
+        self.i_phi_upper = np.full(self.F, 1.0)  # [Lengnick 2013] sets this to 1
         # firm inventory lower bound - percentage of previous demand
         self.i_phi_lower = np.full(self.F, 0.25)  # [Lengnick 2013] sets this to 0.25
-        # firm price upper bound - percentage of previous demand
+        # firm price max % change (nu_f)
+        self.nu = np.full(self.F, 0.02)  # [Lengnick 2013] sets this to 0.02
+        # firm price upper bound - percentage of marginal costs
         self.p_phi_upper = np.full(self.F, 1.15)  # [Lengnick 2013] sets this to 1.15
-        # firm price lower bound - percentage of previous demand
+        # firm price lower bound - percentage of marginal costs
         self.p_phi_lower = np.full(self.F, 1.025)  # [Lengnick 2013] sets this to 1.025
+        # firm probability of accepting price change (theta_f)
+        self.theta = np.full(self.F, 0.75) # [Lengnick 2013] sets this to 0.75
+        # firm technology level - units produced per employee
+        self.t_lambda = np.full(self.F, 3) # [Lengnick 2013] sets this to 3
 
         # initial conditions (TBD)
         # firm liquidity (m_f) - current "bank account" balance
@@ -54,6 +60,8 @@ class Firms:
           ((v > 0) * 1) + ((nv > g) * -1)
         '''
 
+        # TODO: make sure wage never goes negative ??
+
         self.w = self.w * (1 + ((((self.v > 0) * 1) + ((self.nv > self.gamma) * -1)) * np.random.uniform(0, self.delta, self.F)))
 
     def adjust_workforce(self):
@@ -77,3 +85,47 @@ class Firms:
         # - each firm can fire at most 1 employee
         # - make sure employment is not less than zero (or one?)
         self.l = np.clip(self.l - ((self.i > (self.i_phi_upper * self.d)) * 1), 0, None)
+
+    def adjust_prices(self):
+        '''
+        See section 2.2 of [Lengnick 2012] for details:
+
+        - First establish upper and lower limits for price
+          marginal costs: (self.l * self.w) / (self.l * self.t_lambda)
+        - Increase price if current inventory is less than inventory lower limit
+          condition:
+        - Decrease price if current inventory is greater then inventory upper limit
+          condition:
+
+        '''
+
+        # TODO: optimize these calculations
+
+        # deteremine whether prices increase, descrease or remain unchanged for each firm:
+        # if [inventory > upper limit] --> decrease price (-1)
+        # if [inventory < lower limit] --> increase price (+1)
+        # otherwise                    --> price unchanged (0)
+        change_type =   ((self.i > (self.i_phi_upper * self.d)) * -1) + \
+                        ((self.i < (self.i_phi_lower * self.d)) * +1)
+
+        # calculate proposed price change
+        price_change = change_type * self.p * np.random.uniform(0, self.nu, self.F)
+
+        # calculate current marginal cost
+        # [marginal cost] = [wages paid per worker] / [total output per worker]
+        marginal_cost = self.w / self.t_lambda
+
+        # keep price change within bounds
+        # - max price decrease (normally negative)
+        # - if change_type is zero, max decrease is zero
+        max_decrease = (change_type !=0) * (self.p_phi_lower * marginal_cost - self.p)
+        # - max price increase (normally positive)
+        # - if change_type is zero, max iincrease is zero
+        max_increase = (change_type !=0) * (self.p_phi_upper * marginal_cost - self.p)
+
+        # keep price change within bounds
+        price_change = np.clip(price_change, a_min=max_decrease, a_max=max_increase)
+
+        # change price if price change is accepted
+        # - only change price if random # is less than theta
+        self.p = self.p + (((np.random.uniform(0, 1, self.F)) < self.theta) * price_change)
