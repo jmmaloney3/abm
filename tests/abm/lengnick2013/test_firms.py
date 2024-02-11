@@ -17,7 +17,7 @@ def test_set_prop():
     #     6     gamma       -         2D array           TypeError
     #     7     gamma       -     array wrong length     TypeError
     #     8     gamma     "foo"           1              TypeError
-    #     9     gamma     "foo"         array            TypeError
+    #     9     gamma       1           array            TypeError
     #    10     gamma      -1             1              IndexError
     #    11     gamma       5             1              IndexError
     #    12     gamma       -             1            gamma all 1's
@@ -69,21 +69,26 @@ def test_adjust_wages():
 
     # Test Cases:
     #
-    # 
+    # Case  Vacancy  Vacancy-Free Periods   New Wage
+    # ----  -------  --------------------  ----------
+    #  1a      0          nv  < gamma       no change
+    #  1b      0          nv == gamma       no change
+    #  1c      0          nv  > gamma       decrease
+    #  2     v > 0            0             increase
 
-    f = firms.Firms(5)
+    f = firms.Firms(4)
 
     # delta: wage % change upper bound
-    f.delta = np.array([0.1, 0.2, 0.3, 0.4, 0.5])
+    f.delta = np.array([0.1, 0.2, 0.3, 0.4])
 
     # gamma: no. of vacancy-free months before reducing wages
-    f.gamma = np.array([23, 24, 24, 24, 25])
+    f.gamma = np.full(f.F, 24)
 
     # configure vacancies
-    f.v = np.array([0, 1, 0, 2, 0])
+    f.v = np.array([0, 0, 0, 1])
 
     # configure months w/o vacancy
-    f.nv = np.array([24, 0, 24, 0, 24])
+    f.nv = np.array([f.gamma[0]-1, f.gamma[1], f.gamma[2]+1, 0])
  
     # configure initial wages
     f.w = np.ones(f.F)
@@ -94,31 +99,25 @@ def test_adjust_wages():
     # adjust wages
     f.adjust_wages()
 
-    # test firm 1: vacancy-free for more than gamma months
-    # - wage was decreased
-    assert f.w[0] < w_old[0]
+    # Case 1a: vacancy-free for less than gamma months
+    # - wage is unchanged
+    assert f.w[0] == w_old[0]
+
+    # Case 1b: vacancy-free for exactly gamma months
+    # - wage is unchanged
+    assert f.w[1] == w_old[1]
+
+    # Case 1c: vacancy-free for more than gamma months
+    # - wage is decreased
+    assert f.w[2] < w_old[2]
     # - wage decrease was less than delta %
-    assert f.w[0] >= (w_old[0] * (1-f.delta[0]))
+    assert f.w[2] >= (w_old[2] * (1-f.delta[2]))
 
-    # test firm 2: has 1 vacancy remaining
-    # - wage was increased
-    assert f.w[1] > w_old[1]
-    # - wage increase was less than delta %
-    assert f.w[1] <= (w_old[1] * (1+f.delta[1]))
-
-    # test firm 3: vacancy-free for exactly gamma months
-    # - wage was unchanged
-    assert f.w[2] == w_old[2]
-
-    # test firm 4: has 2 vacancies remaining
-    # - wage was increased
+    # Case 2: has 1 vacancy remaining
+    # - wage is increased
     assert f.w[3] > w_old[3]
     # - wage increase was less than delta %
     assert f.w[3] <= (w_old[3] * (1+f.delta[3]))
-
-    # test firm 5: vacancy-free for less than gamma months
-    # - wage was unchanged
-    assert f.w[4] == w_old[4]
 
 def test_adjust_workforce():
     f = firms.Firms(7)
