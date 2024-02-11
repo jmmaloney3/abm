@@ -1,4 +1,5 @@
 import numpy as np
+import numbers
 
 class Firms:
     # initialize firms
@@ -45,6 +46,63 @@ class Firms:
         self.v = np.ones(self.F) # every firm has a vacancy at start
         # firm number of months without vacancy
         self.nv = np.zeros(self.F) # no months w/o vacancy at start
+
+    def set_prop(self, prop_name, value, id=None):
+        '''
+        Set the value of the firm property either for a single firm or
+        for all firms.
+
+        Args:
+            prop_name (string):The name of the property to update
+            id (int, optional):
+                 The `id` of the firm whose property should be updated. If
+                 a value is specified for `id` then `array` must be equal
+                 to `None`.
+            value (numbers.Number of numpy.ndarray):
+                 The value to be set for the specified property.  If a value
+                 for `id` is provided then `value` must be a `numbers.Number`.
+                 If `id` is equal to `None` then the specified `value` s used
+                 to update the values of all the firms.  In this case, if a
+                 single `numbes.Number` value is provided, the property for
+                 all firms is set to the specified `value`.  If a `numpy.Array`
+                 is provided then the number of elements in the array must equal
+                 the number of firms and the array is used to set property
+                 valuse for all the firms.
+        '''
+        # verify 'prop_name' is valid
+        if (not isinstance(prop_name, str)):
+            raise TypeError(f"'prop_name' must be a string, not '{type(prop_name).__name__}'")
+        if (not hasattr(self, prop_name)):
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{prop_name}'")
+
+        # verify that 'value' is valid
+        # TODO: allow the array argument to be "array-like" instead of a numpy array
+        if not (isinstance(value, numbers.Number) or isinstance(value, np.ndarray)):
+            raise TypeError(f"Argument 'value' must be a single numeric value or a 1-dimensional array of length {self.F}.")
+
+        # attempt to set the value of the property
+        if (id is None):
+            if isinstance(value, numbers.Number):
+                setattr(self, prop_name, np.full(self.F, value))
+            elif isinstance(value, np.ndarray):
+                if (value.ndim == 1 and len(value) == self.F):
+                    setattr(self, prop_name, np.full(self.F, value))
+                else:
+                    raise TypeError(f"Argument 'value' array must be 1-dimensional with length {self.F}.")
+            else:
+                raise RuntimeError(f"Expected 'value' to be a single numeric value or an array")
+        else: # (id is not None)
+            # verify that id is an integer
+            if (not isinstance(id, int)):
+                raise TypeError(f"'id' must be an int, not '{type(id).__name__}'")
+            # verify that id is in bounds
+            if (id < 0 or id >= self.F):
+                raise IndexError(f"'id' {id} is out of bounds: 0 <= 'id' < {self.F}")
+            if isinstance(value, numbers.Number):
+                arr = getattr(self, prop_name)
+                arr[id] = value
+            else:
+                raise TypeError(f"Argument 'value' must be a single numeric value")
 
     def adjust_wages(self):
         '''
@@ -110,7 +168,6 @@ class Firms:
 
         # calculate proposed price change
         price_change = change_type * self.p * np.random.uniform(0, self.nu, self.F)
-
         # calculate current marginal cost
         # [marginal cost] = [wages paid per worker] / [total output per worker]
         marginal_cost = self.w / self.t_lambda

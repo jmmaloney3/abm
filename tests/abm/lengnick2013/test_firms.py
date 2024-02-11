@@ -1,7 +1,76 @@
+import pytest
+
 import numpy as np
 import abm.lengnick2013.firms as firms
 
+def test_set_prop():
+
+    # Test Cases:
+    #
+    #    case  propName    id           value             result
+    #    ----  --------   -----   ------------------  ---------------
+    #     1       -         -             -              TypeError
+    #     2       1         -             1              TypeError
+    #     3      foo        -             -              TypeError
+    #     4     gamma       -           "foo"            TypeError
+    #     5      foo        -             1            AttributeError
+    #     6     gamma       -         2D array           TypeError
+    #     7     gamma       -     array wrong length     TypeError
+    #     8     gamma     "foo"           1              TypeError
+    #     9     gamma     "foo"         array            TypeError
+    #    10     gamma      -1             1              IndexError
+    #    11     gamma       5             1              IndexError
+    #    12     gamma       -             1            gamma all 1's
+    #    13     gamma       -        [1,2,3,4,5]       gamma = array
+    #    14     gamma       2             3             f.gamma[2]=3
+
+    # initialize test firms
+    f = firms.Firms(5)
+
+    # cases 1, 2, 3, & 4
+    with pytest.raises(TypeError):
+        f.set_prop()
+        f.set_prop(1)
+        f.set_prop("foo")
+
+    # case 5
+    with pytest.raises(AttributeError):
+        f.set_prop("foo", 1)
+
+    # cases 6, 7, 8, & 9
+    with pytest.raises(TypeError):
+        f.set_prop("gamma", np.array([1,2,3], [1,2,3]))
+        f.set_prop("gamma", np.array([1,2,3]))
+        f.set_prop("gamma", "foo", id=1)
+        f.set_prop("gamma", np.full(f.F, 1.1), id=1)
+
+    # cases 10 & 11
+    with pytest.raises(IndexError):
+        f.set_prop("gamma", 1, id=-1)
+        f.set_prop("gamma", 1, id=f.F)
+
+    # case 12
+    f.set_prop("gamma", 1)
+    assert np.array_equal(f.gamma, np.full(f.F, 1))
+
+    # case 13
+    new_gamma = np.array([1,2,3,4,5])
+    f.set_prop("gamma", new_gamma)
+    assert np.array_equal(f.gamma, new_gamma)
+
+    # case 14
+    old_gamma = f.gamma
+    f.set_prop("gamma", 3, id=2)
+    assert f.gamma[2] == 3
+    assert np.array_equal(f.gamma[:2], old_gamma[:2])
+    assert np.array_equal(f.gamma[3:], old_gamma[3:])
+
 def test_adjust_wages():
+
+    # Test Cases:
+    #
+    # 
+
     f = firms.Firms(5)
 
     # delta: wage % change upper bound
