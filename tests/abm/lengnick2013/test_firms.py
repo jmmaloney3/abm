@@ -120,81 +120,62 @@ def test_adjust_wages():
     assert f.w[3] <= (w_old[3] * (1+f.delta[3]))
 
 def test_adjust_workforce():
-    f = firms.Firms(7)
 
-    # i_phi_upper: max % of previous month demand
-    f.i_phi_upper = np.full(f.F, 1.0)
+    # Test Cases:
+    #
+    # Case    Inventory      Vacancy    Workforce   New Vacancy  New Workforce
+    # ---- ---------------  ---------  -----------  -----------  -------------
+    #  1a    i < lb < ub        0           1            1         unchanged
+    #  1b    i < lb < ub        1           1        unchanged     unchanged
+    #  2a    lb = i < ub        0           1        unchanged     unchanged
+    #  2b    lb = i < ub        1           1            0         unchanged
+    #  3a    lb < i < ub        0           1        unchanged     unchanged
+    #  3b    lb < i < ub        1           1            0         unchanged
+    #  4a    lb < i = ub        0           1        unchanged     unchanged
+    #  4b    lb < i = ub        1           1            0         unchanged
+    #  5a    lb < ub < i        0           1        unchanged         0
+    #  5b    lb < ub < i        1           1            0             0
+    #  5c    lb < ub < i        0           0        unchnaged     unchanged
+    #  5d    lb < ub < i        1           0            0         unchanged
 
-    # i_phi_lower: min % of previous month demand
-    f.i_phi_lower = np.full(f.F, 0.25)
+    N = 12
+    f = firms.Firms(N)
 
-    # configure previous month demand
-    f.d = np.array([1, 2, 5, 6, 20, 25, 30])
-
-    # configure current inventory
-    f.i = np.full(f.F, 5)
-
+    # configure cparameters for the test firms
+    # - configure current inventory
+    f.i = np.full(N, 5)
+    # - configure previous month demand
+    f.d = np.full(N, 5)
     # configure vacancies
-    f.v = np.array([0, 1, 0, 2, 0, 0, 1])
-
+    f.v = np.array([x%2 for x in range(N)])
     # configure workforce sizes
-    f.l = np.array([0, 1, 2, 3, 4, 5, 6])
+    f.l = np.array([1*(x<10) for x in range(N)])
 
-    # save current workforce sizes for comparison
-    l_old = f.l
+    # initialize inventory bounds factors
+    f.i_phi_lower = np.array([1.1, 1.1, 1.0, 1.0, 0.9, 0.9, 0.8, 0.8, 0.7, 0.7, 0.7, 0.7])
+    f.i_phi_upper = np.array([1.3, 1.3, 1.2, 1.2, 1.1, 1.1, 1.0, 1.0, 0.9, 0.9, 0.9, 0.9])
+
+    # new vacancy - result array
+    new_v = f.v
+    new_v[0] = 1
+    new_v[3] = new_v[5] = new_v[7] = new_v[9] = new_v[11] = 0
+    # new workforce - result array
+    new_l = f.l
+    new_l[8] = new_l[9] = 0
 
     # save current vacancies for comparison
     v_old = f.v
 
+    # save current workforce for comparison
+    l_old = f.l
+
     # adjust workforce
     f.adjust_workforce()
 
-    # test firm 1: inventory above upper limit but workforce min size
-    # - workforce remained unchanged at zero
-    assert f.l[0] == l_old[0]
-    assert f.l[0] == 0
-    # - no vacancies
-    assert f.v[0] == 0
-
-    # test firm 2: inventory above upper limit
-    # - workforce size is one less
-    assert f.l[1] == (l_old[1] - 1)
-    # - workforce size is >= workforce min size
-    assert f.l[1] >= 0
-    # - no vacancies exist
-    assert f.v[1] == 0
-
-    # test firm 3: inventory equal to upper limit
-    # - workforce size is unchanged
-    assert f.l[2] == l_old[2]
-    # - no vacancies exist
-    assert f.v[2] == 0
-
-    # test firm 4: inventory between limits
-    # - workforce size is unchanged
-    assert f.l[3] == l_old[3]
-    # - no vacancies exist
-    assert f.v[3] == 0
-
-    # test firm 5: inventory equal to lower limit
-    # - workforce size is unchanged
-    assert f.l[4] == l_old[4]
-    # - no vacancies exist
-    assert f.v[4] == 0
-
-    # test firm 6: inventory below lower limit w/no pre-existing vacancy
-    # - workforce size is unchanged
-    assert f.l[5] == l_old[5]
-    # - one new vacancy exists
-    assert v_old[5] == 0 # validate test data
-    assert f.v[5] == 1
-
-    # test firm 7: inventory below lower limit w/pre-existing vacancy
-    # - workforce size is unchanged
-    assert f.l[6] == l_old[6]
-    # - previously existing vacancy still exists
-    assert v_old[6] == 1 # validate test data
-    assert f.v[6] == 1
+    # verify result
+    for x in range(12):
+        assert f.l[x] == new_l[x]
+        assert f.v[x] == new_v[x]
 
 def test_adjust_prices():
 
