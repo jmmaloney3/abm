@@ -168,21 +168,31 @@ class Firms:
 
         # calculate proposed price change
         price_change = change_type * self.p * np.random.uniform(0, self.nu, self.F)
+
         # calculate current marginal cost
         # [marginal cost] = [wages paid per worker] / [total output per worker]
         marginal_cost = self.w / self.t_lambda
 
-        # keep price change within bounds
-        # - max price decrease (normally negative)
-        # - if change_type is zero, max decrease is zero
-        max_decrease = (change_type !=0) * (self.p_phi_lower * marginal_cost - self.p)
-        # - max price increase (normally positive)
-        # - if change_type is zero, max iincrease is zero
-        max_increase = (change_type !=0) * (self.p_phi_upper * marginal_cost - self.p)
+        # price lower bound
+        # - increase  (change_type == 1): max(lb, p) - never lower price
+        # - no change (change_type == 0): p
+        # - decrease  (change_type = -1): min(lb, p) - never raise price
+        p_lower_bound = (change_type  > 0) * np.maximum(self.p_phi_lower * marginal_cost, self.p) + \
+                        (change_type == 0) * self.p + \
+                        (change_type  < 0) * np.minimum(self.p_phi_lower * marginal_cost, self.p)
 
-        # keep price change within bounds
-        price_change = np.clip(price_change, a_min=max_decrease, a_max=max_increase)
+        # price upper bound
+        # - increase  (change_type == 1): max(ub, p) - never lower price
+        # - no change (change_type == 0): p
+        # - decrease  (change_type = -1): min(ub, p) - never raise price
+        p_upper_bound = (change_type  > 0) * np.maximum(self.p_phi_upper * marginal_cost, self.p) + \
+                        (change_type == 0) * self.p + \
+                        (change_type  < 0) * np.minimum(self.p_phi_upper * marginal_cost, self.p)
+
+        # calculate proposed new price
+        new_p = np.clip(self.p + price_change, a_min=p_lower_bound, a_max=p_upper_bound)
 
         # change price if price change is accepted
         # - only change price if random # is less than theta
-        self.p = self.p + (((np.random.uniform(0, 1, self.F)) < self.theta) * price_change)
+        new_price_accepted = ((np.random.uniform(0, 1, self.F)) < self.theta)
+        self.p = (new_price_accepted * new_p) + (~new_price_accepted * self.p)

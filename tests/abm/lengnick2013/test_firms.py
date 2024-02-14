@@ -181,16 +181,29 @@ def test_adjust_prices():
 
     # Test Cases:
     #
-    # Unless noted otherwise, for the following test cases,
-    # theta is set to 1.0 to ensure that price change occurs
+    # Note: For cases 1 - 5, theta is set to 1.0 to ensure
+    # that price change is always accepted.
+    #
+    # Note: The price change factor (nu) is set such that
+    # if the current price is outside the price bounds the 
+    # new price will still be outside the bounds.  In these
+    # cases, the new price will be set to the appropriate
+    # price bound (see cases 1a & 5e).
+    #
+    # Note: If a price increase is required, and the current
+    # price is above the price upper bound, the price is NOT
+    # decreased to bring it within the bounds (see case 1e).
+    # Similarly, if a price decrease is required, and the
+    # price is below the price lower bound, the price is NOT
+    # increased to bring it within the bounds (see case 5a).
     #
     # Case    Inventory     Calculated Price   New Price
     # ---- ---------------  ----------------  -----------
-    #  1a    i < lb < ub      p < lb < ub         lb
+    #  1a    i < lb < ub      p < lb < ub         lb          (***)
     #  1b    i < lb < ub      lb = p < ub         lb
     #  1c    i < lb < ub      lb < p < ub      old_p < p
     #  1d    i < lb < ub      lb < p = ub         ub
-    #  1e    i < lb < ub      lb < ub < p         ub
+    #  1e    i < lb < ub      lb < ub < p      p == old_p     (***)
     #
     #  2a    lb = i < ub      p < lb < ub      no change
     #  2b    lb = i < ub      lb = p < ub      no change
@@ -210,14 +223,14 @@ def test_adjust_prices():
     #  4d    lb < i = ub      lb < p = ub      no change
     #  4e    lb < i = ub      lb < ub < p      no change
     #
-    #  5a    lb < ub < i      p < lb < ub         lb
+    #  5a    lb < ub < i      p < lb < ub      p == old_p    (***)
     #  5b    lb < ub < i      lb = p < ub         lb
     #  5c    lb < ub < i      lb < p < ub      p < old_p
     #  5d    lb < ub < i      lb < p = ub         ub
-    #  5e    lb < ub < i      lb < ub < p         ub
+    #  5e    lb < ub < i      lb < ub < p         ub         (***)
     #
-    # For case 6, theta is set to zero so that the price change
-    # is not accepted.
+    # Note: For case 6, theta is set to zero so that the
+    # price change is not accepted.
     #
     #  6a    i < lb < ub      lb < p < ub      old_p == p
     #  6b    lb < ub < i      lb < p < ub      old_p == p
@@ -330,15 +343,30 @@ def test_adjust_prices():
     # evaluate result
     for x in range(N):
         if (x//5 in (1, 2, 3, 5)): # price doesn't change
-            assert f.p[x] == old_p[x]
-        else: # (x//5 in (0, 4))
+            assert (f.p[x] == old_p[x])
+        elif (x//5 == 0):
             if (x%5 in (0, 1)):
                 assert (f.p[x] == p_lower_bound[x])
             elif (x%5 == 2):
                 assert (p_lower_bound[x] < f.p[x]) and (f.p[x] < p_upper_bound[x])
-                if (x//5 == 0):
-                    assert (old_p[x] < f.p[x])
-                else: # (x//5 == 4)
-                    assert (f.p[x] < old_p[x])
-            else: # (x%5 in (3, 4))
-                assert f.p[3] == p_upper_bound[3]
+                assert (old_p[x] < f.p[x])
+            elif (x%5 == 3):
+                assert (f.p[3] == p_upper_bound[3])
+            elif (x%5 == 4):
+                assert (f.p[x] == old_p[x]) # will fail
+            else:
+                assert False # unexpected case
+        elif (x//5 == 4):
+            if (x%5 == 0):
+                assert (f.p[x] == old_p[x]) # will fail
+            elif (x%5 == 1):
+                assert (f.p[x] == p_lower_bound[x])
+            elif (x%5 == 2):
+                assert (p_lower_bound[x] < f.p[x]) and (f.p[x] < p_upper_bound[x])
+                assert (f.p[x] < old_p[x])
+            elif (x%5 in (3, 4)):
+                assert (f.p[3] == p_upper_bound[3])
+            else:
+                assert False # unexpected case
+        else:
+            assert False # unexpected case
