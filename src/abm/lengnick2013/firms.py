@@ -41,11 +41,11 @@ class Firms:
         # firm price (p_f) - current price
         self.p = np.ones(self.F) # price set to 1 at start (?)
         # firm labor (l_f) - number of households currently employed by each firm
-        self.l = np.ones(self.F) # employees set to 1 at start (?)
+        self.l = np.ones(self.F, dtype=int) # employees set to 1 at start (?)
         # firm vacancies - current open positions
-        self.v = np.ones(self.F) # every firm has a vacancy at start
+        self.v = np.zeros(self.F, dtype=int) # every firm has zero vacancy at start
         # firm number of months without vacancy
-        self.nv = np.zeros(self.F) # no months w/o vacancy at start
+        self.nv = np.zeros(self.F, dtype=int) # no months w/o vacancy at start
 
     def set_prop(self, prop_name, value, id=None):
         '''
@@ -109,18 +109,49 @@ class Firms:
         See section 2.2 of [Lengnick 2012] for details:
 
         - Increase wage if vacancy was not filled during previous month
+          AND vacancy will remain open during the next month
           condition: (v > 0)
         - Decrease wage if no vacancies for last gamma months
+          AND no vacancy will be opened next month
           condition: (nv > g)
         - Randomly select wage change with upper limit equal to delta
           np.random.uniform(0, delta, F)
         - Deteremine direction of wage change (increase or decrease):
-          ((v > 0) * 1) + ((nv > g) * -1)
+          conditions:
+          - (v > 0) and (new_v > 0)        -> increase wage (+1)
+          - (nv >= gamma) and (new_v == 0) -> decrease wage (-1)
+          - otherwise                      -> wage unchanged (0)
         '''
 
         # TODO: make sure wage never goes negative ??
 
-        self.w = self.w * (1 + ((((self.v > 0) * 1) + ((self.nv > self.gamma) * -1)) * np.random.uniform(0, self.delta, self.F)))
+        # TODO: consider combining adjust_wages with adjust_workforce
+
+        # make sure wages are not modified in a way that conflicts with
+        # the workforce adjustments that will be made during next month
+        # !!!TEST REQUIRED!!!
+
+        # deteremine whether wages increase, decrease or remain unchanged for
+        # each firm:
+        # if (open vacancy last month AND next month)   --> increase wages (+1)
+        # if (previous vacancy-free months >= gamma AND
+        #     no open vacancy next month)               --> decrease wages (-1)
+        # otherwise                                     --> wages unchanged (0)
+
+        # make sure data is consistent - only one of the following can be true:
+        # - open vacancy last month: (f.v  > 0)
+        # - vacancy-free last month: (f.nv > 0)
+        if (np.any((self.v > 0) & (self.nv > 0))):
+            n = 0
+            while (not (self.v[n] > 0) and (self.nv[n] > 0)):
+                n = n + 1
+            raise RuntimeError(f"Firm {n} had an open vacancy AND was vacancy-free last month")
+
+        new_v = (self.i < (self.i_phi_lower * self.d)) * 1
+        change_type =   ((self.v & new_v) * +1) + \
+                        (((self.nv >= self.gamma) & ~new_v) * -1)
+
+        self.w = self.w * (1 + (change_type * np.random.uniform(0, self.delta, self.F)))
 
     def adjust_workforce(self):
         '''
@@ -139,9 +170,14 @@ class Firms:
         # - each firm can have at most 1 vacancy
         self.v = ((self.i < (self.i_phi_lower * self.d)) * 1)
 
+        # increment vacancy-free periods if no vacancy is open
+        # !!!TEST REQUIRED!!!
+        self.nv = (self.v == 0) * (self.nv + 1)
+
         # fire employees
         # - each firm can fire at most 1 employee
         # - make sure employment is not less than zero (or one?)
+        # TODO: fired employees work for one more month
         self.l = np.clip(self.l - ((self.i > (self.i_phi_upper * self.d)) * 1), 0, None)
 
     def adjust_prices(self):

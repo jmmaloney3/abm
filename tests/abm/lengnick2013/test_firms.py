@@ -1,4 +1,5 @@
 import pytest
+import traceback
 
 import numpy as np
 import abm.lengnick2013.firms as firms
@@ -69,55 +70,81 @@ def test_adjust_wages():
 
     # Test Cases:
     #
-    # Case  Vacancy  Vacancy-Free Periods   New Wage
-    # ----  -------  --------------------  ----------
-    #  1a      0          nv  < gamma       no change
-    #  1b      0          nv == gamma       no change
-    #  1c      0          nv  > gamma       decrease
-    #  2     v > 0            0             increase
+    # Notes:
+    # - vacancy-free count is for last month (doesn't include "next month")
+    # - Vacancy-free can never be (>= thresh) AND (NOT > 0)
+    #
+    # Case #                          00 01 02 03 04 05 06 07 08 09 10 11
+    # INPUT STATE:
+    # vacancy open - last month (T/F)  F  F  F  F  F  F  T  T  T  T  T  T
+    # vacancy open - next month (T/F)  F  F  F  T  T  T  F  F  F  T  T  T
+    # vacancy-free > 0 (T/F)           F  T  T  F  T  T  F  T  T  F  T  T
+    # vacancy-free >= thresh (T/F)     F  F  T  F  F  T  F  F  T  F  F  T
+    # OUTPUT/ACTIONS:                                       *  *     *  *
+    # raise exception (T/F)            F  F  F  F  F  F  F  T  T  F  T  T
+    # wage change (+/0/-)              0  0  -  0  0  0  0  E  E  +  E  E
 
-    f = firms.Firms(4)
+    N = 12
+
+    # vacancy opened "last month"
+    vacancy_last_month = np.array([ 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1 ])
+
+    # vacancy opened "next month"
+    # - vacancy is opned next month if inventory is below the
+    #   lower bound defined by the following:
+    #   f.i_phi_lower * f.d = 0.2 * 5 = 1
+    demand = np.full(N, 5)
+    i_phi_lower = np.full(N, 0.2)
+    # some cases set equal to threshhold (1) others above threshhold (2, 3)
+    inventory  = np.array([ 1, 2, 3, 0, 0, 0, 1, 2, 3, 0, 0, 0 ])
+
+    # vacancy-free months threshold
+    vacancy_free_thresh = np.full(N, 5)
+    vacancy_free_months = np.array([0, 1, 5, 0, 2, 6, 0, 3, 7, 0, 4, 8])
+
+    # results: expected wage changes
+    #  +1: wage increases
+    #   0: wage remains unchanged
+    #  -1: wage decreases
+    #  -9: exception
+    wage_change = np.array([ 0, 0,-1, 0, 0, 0, 0,-9,-9,+1,-9,-9 ])
+
+    # results: error cases
+    exception_expected = (wage_change == -9)
 
     # delta: wage % change upper bound
-    f.delta = np.array([0.1, 0.2, 0.3, 0.4])
+    wage_delta = np.full(N, 0.1)
 
-    # gamma: no. of vacancy-free months before reducing wages
-    f.gamma = np.full(f.F, 24)
+    # wages "last month"
+    wage = old_wage = np.full(N, 5)
 
-    # configure vacancies
-    f.v = np.array([0, 0, 0, 1])
+    # iterate through test cases
+    for x in range(N):
+        f = firms.Firms(1)
+        # vacancy last month
+        f.v[0] = vacancy_last_month[x]
+        # vacancy next month
+        f.d[0] = demand[x]
+        f.i_phi_lower[0] = i_phi_lower[x]
+        f.i[0] = inventory[x]
+        # vacancy-free months
+        f.gamma[0] = vacancy_free_thresh[x]
+        f.nv[0] = vacancy_free_months[x]
+        # wage & delta
+        f.delta[0] = wage_delta[x]
+        f.w[0] = wage[x]
 
-    # configure months w/o vacancy
-    f.nv = np.array([f.gamma[0]-1, f.gamma[1], f.gamma[2]+1, 0])
- 
-    # configure initial wages
-    f.w = np.ones(f.F)
-
-    # save current wages for comparison
-    w_old = f.w
-
-    # adjust wages
-    f.adjust_wages()
-
-    # Case 1a: vacancy-free for less than gamma months
-    # - wage is unchanged
-    assert f.w[0] == w_old[0]
-
-    # Case 1b: vacancy-free for exactly gamma months
-    # - wage is unchanged
-    assert f.w[1] == w_old[1]
-
-    # Case 1c: vacancy-free for more than gamma months
-    # - wage is decreased
-    assert f.w[2] < w_old[2]
-    # - wage decrease was less than delta %
-    assert f.w[2] >= (w_old[2] * (1-f.delta[2]))
-
-    # Case 2: has 1 vacancy remaining
-    # - wage is increased
-    assert f.w[3] > w_old[3]
-    # - wage increase was less than delta %
-    assert f.w[3] <= (w_old[3] * (1+f.delta[3]))
+        try:
+            f.adjust_wages()
+        except Exception as e:
+            assert exception_expected[x]
+        else:
+            if (wage_change[x] > 0):
+                assert old_wage[x] < f.w[0]
+            elif (wage_change[x] < 0):
+                assert old_wage[x] > f.w[0]
+            else: # (wage_change[x] == 0)
+                assert old_wage[x] == f.w[0]
 
 def test_adjust_workforce():
 
