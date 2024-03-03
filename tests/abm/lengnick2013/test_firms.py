@@ -72,7 +72,8 @@ def test_adjust_wages():
     #
     # Notes:
     # - vacancy-free count is for last month (doesn't include "next month")
-    # - Vacancy-free can never be (>= thresh) AND (NOT > 0)
+    # - vacancy-free can never be (>= thresh) AND (NOT > 0) therefore these
+    #   cases are not included in the set of test cases
     #
     # Case #                          00 01 02 03 04 05 06 07 08 09 10 11
     # INPUT STATE:
@@ -146,63 +147,72 @@ def test_adjust_wages():
             else: # (wage_change[x] == 0)
                 assert old_wage[x] == f.w[0]
 
+def configure_inventory_level(f, x, level):
+    """
+    Given desired relationships between inventory and the inventory bounds,
+    set appropriate values for demand (d), inventory (i), and inventory
+    bounds (i_phi_lower & i_phi_upper).
+
+    Args:
+        f (Firms object) - the object holding the firms
+        x (int) - the firm to configure
+        level (int) - relationship between inventory and the bounds to
+           be configured
+            -2: i < lb < ub
+            -1: i = lb < ub
+             0: lb < i < ub
+            +1: lb < i = ub
+            +2: lb < ub < i
+    """
+
+    f.d[x] = 5
+    f.i_phi_lower[x] = 0.4 # 5 * 0.2 = 2
+    f.i_phi_upper[x] = 1.2 # 5 * 1.2 = 6
+
+    f.i[x] = (level < 0)  * f.d[x] * f.i_phi_lower[x] + \
+             (level >= 0) * f.d[x] * f.i_phi_upper[x] + \
+             (level in [-2, 0]) * (-1) + \
+             (level == 2) * (+1)
+
 def test_adjust_workforce():
 
-    # Test Cases:
-    #
-    # Case    Inventory      Vacancy    Workforce   New Vacancy  New Workforce
-    # ---- ---------------  ---------  -----------  -----------  -------------
-    #  1a    i < lb < ub        0           1            1         unchanged
-    #  1b    i < lb < ub        1           1        unchanged     unchanged
-    #  2a    lb = i < ub        0           1        unchanged     unchanged
-    #  2b    lb = i < ub        1           1            0         unchanged
-    #  3a    lb < i < ub        0           1        unchanged     unchanged
-    #  3b    lb < i < ub        1           1            0         unchanged
-    #  4a    lb < i = ub        0           1        unchanged     unchanged
-    #  4b    lb < i = ub        1           1            0         unchanged
-    #  5a    lb < ub < i        0           1        unchanged         0
-    #  5b    lb < ub < i        1           1            0             0
-    #  5c    lb < ub < i        0           0        unchnaged     unchanged
-    #  5d    lb < ub < i        1           0            0         unchanged
+    # Case #                          00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19
+    # INPUT STATE:
+    # inventory (<l/=l/0/=u/>u)       <l <l <l <l =l =l =l =l  0  0  0  0 =u =u =u =u >u >u >u >u
+    # vacancy open - last month (T/F)  F  F  T  T  F  F  T  T  F  F  T  T  F  F  T  T  F  F  T  T
+    # zero workforce (T/F)             F  T  F  T  F  T  F  T  F  T  F  T  F  T  F  T  F  T  F  T
+    # OUTPUT/ACTIONS:
+    # vacancy open - next month (T/F)  T  T  T  T  F  F  F  F  F  F  F  F  F  F  F  F  F  F  F  F
+    # workforce decrease (T/F)         F  F  F  F  F  F  F  F  F  F  F  F  F  F  F  F  T  F  T  F
 
-    N = 12
-    f = firms.Firms(N)
+    N = 20
 
-    # configure cparameters for the test firms
-    # - configure current inventory
-    f.i = np.full(N, 5)
-    # - configure previous month demand
-    f.d = np.full(N, 5)
-    # configure vacancies
-    f.v = np.array([x%2 for x in range(N)])
-    # configure workforce sizes
-    f.l = np.array([1*(x<10) for x in range(N)])
+    # configure parameters for the test firms
+    inv_levels            = np.array([-2,-2,-2,-2,-1,-1,-1,-1, 0, 0, 0, 0,+1,+1,+1,+1,+2,+2,+2,+2])
+    vacancy               = np.array([ 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1])
+    workforce_size        = np.array([ 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0])
 
-    # initialize inventory bounds factors
-    f.i_phi_lower = np.array([1.1, 1.1, 1.0, 1.0, 0.9, 0.9, 0.8, 0.8, 0.7, 0.7, 0.7, 0.7])
-    f.i_phi_upper = np.array([1.3, 1.3, 1.2, 1.2, 1.1, 1.1, 1.0, 1.0, 0.9, 0.9, 0.9, 0.9])
+    # define results
+    new_vacancy           = np.array([ 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    workforce_change      = np.array([ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1, 0,-1, 0])
 
-    # new vacancy - result array
-    new_v = f.v
-    new_v[0] = 1
-    new_v[3] = new_v[5] = new_v[7] = new_v[9] = new_v[11] = 0
-    # new workforce - result array
-    new_l = f.l
-    new_l[8] = new_l[9] = 0
+    for x in range(N):
+        print(x)
+        f = firms.Firms(1)
+        # configure inventory level (inventory, demand, & bounds parameters)
+        configure_inventory_level(f, 0, inv_levels[x])
+        # configure vacancy
+        f.v[0] = vacancy[x]
+        # configure workforce size
+        f.l[0] = workforce_size[x]
+        # remember workforce size
 
-    # save current vacancies for comparison
-    v_old = f.v
+        # adjust workforce
+        f.adjust_workforce()
 
-    # save current workforce for comparison
-    l_old = f.l
-
-    # adjust workforce
-    f.adjust_workforce()
-
-    # verify result
-    for x in range(12):
-        assert f.l[x] == new_l[x]
-        assert f.v[x] == new_v[x]
+        # check result
+        assert f.v[0] == new_vacancy[x]
+        assert f.l[0] == (workforce_size[x] + workforce_change[x])
 
 def test_adjust_prices():
 
