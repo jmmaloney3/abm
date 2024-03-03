@@ -66,87 +66,6 @@ def test_set_prop():
     assert np.array_equal(f.gamma[:2], old_gamma[:2])
     assert np.array_equal(f.gamma[3:], old_gamma[3:])
 
-def test_adjust_wages():
-
-    # Test Cases:
-    #
-    # Notes:
-    # - vacancy-free count is for last month (doesn't include "next month")
-    # - vacancy-free can never be (>= thresh) AND (NOT > 0) therefore these
-    #   cases are not included in the set of test cases
-    #
-    # Case #                          00 01 02 03 04 05 06 07 08 09 10 11
-    # INPUT STATE:
-    # vacancy open - last month (T/F)  F  F  F  F  F  F  T  T  T  T  T  T
-    # vacancy open - next month (T/F)  F  F  F  T  T  T  F  F  F  T  T  T
-    # vacancy-free > 0 (T/F)           F  T  T  F  T  T  F  T  T  F  T  T
-    # vacancy-free >= thresh (T/F)     F  F  T  F  F  T  F  F  T  F  F  T
-    # OUTPUT/ACTIONS:                                       *  *     *  *
-    # raise exception (T/F)            F  F  F  F  F  F  F  T  T  F  T  T
-    # wage change (+/0/-)              0  0  -  0  0  0  0  E  E  +  E  E
-
-    N = 12
-
-    # vacancy opened "last month"
-    vacancy_last_month = np.array([ 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1 ])
-
-    # vacancy opened "next month"
-    # - vacancy is opned next month if inventory is below the
-    #   lower bound defined by the following:
-    #   f.i_phi_lower * f.d = 0.2 * 5 = 1
-    demand = np.full(N, 5)
-    i_phi_lower = np.full(N, 0.2)
-    # some cases set equal to threshhold (1) others above threshhold (2, 3)
-    inventory  = np.array([ 1, 2, 3, 0, 0, 0, 1, 2, 3, 0, 0, 0 ])
-
-    # vacancy-free months threshold
-    vacancy_free_thresh = np.full(N, 5)
-    vacancy_free_months = np.array([0, 1, 5, 0, 2, 6, 0, 3, 7, 0, 4, 8])
-
-    # results: expected wage changes
-    #  +1: wage increases
-    #   0: wage remains unchanged
-    #  -1: wage decreases
-    #  -9: exception
-    wage_change = np.array([ 0, 0,-1, 0, 0, 0, 0,-9,-9,+1,-9,-9 ])
-
-    # results: error cases
-    exception_expected = (wage_change == -9)
-
-    # delta: wage % change upper bound
-    wage_delta = np.full(N, 0.1)
-
-    # wages "last month"
-    wage = old_wage = np.full(N, 5)
-
-    # iterate through test cases
-    for x in range(N):
-        f = firms.Firms(1)
-        # vacancy last month
-        f.v[0] = vacancy_last_month[x]
-        # vacancy next month
-        f.d[0] = demand[x]
-        f.i_phi_lower[0] = i_phi_lower[x]
-        f.i[0] = inventory[x]
-        # vacancy-free months
-        f.gamma[0] = vacancy_free_thresh[x]
-        f.nv[0] = vacancy_free_months[x]
-        # wage & delta
-        f.delta[0] = wage_delta[x]
-        f.w[0] = wage[x]
-
-        try:
-            f.adjust_wages()
-        except Exception as e:
-            assert exception_expected[x]
-        else:
-            if (wage_change[x] > 0):
-                assert old_wage[x] < f.w[0]
-            elif (wage_change[x] < 0):
-                assert old_wage[x] > f.w[0]
-            else: # (wage_change[x] == 0)
-                assert old_wage[x] == f.w[0]
-
 def configure_inventory_level(f, x, level):
     """
     Given desired relationships between inventory and the inventory bounds,
@@ -173,6 +92,107 @@ def configure_inventory_level(f, x, level):
              (level >= 0) * f.d[x] * f.i_phi_upper[x] + \
              (level in [-2, 0]) * (-1) + \
              (level == 2) * (+1)
+
+def configure_vacancy_free_level(f, x, level):
+    """
+    Given desired relationships between vacancy-free months and the
+    vacancy-free threshhold, set appropriate values for vacancy-free (nv),
+    vacancy-free threshhold (gamma).
+
+    Args:
+        f (Firms object) - the object holding the firms
+        x (int) - the firm to configure
+        level (int) - relationship between vacancy-free and the threshhold to
+           be configured
+             0: vacancy-free months equal to zero
+            -1: vacancy-free months greater than zero but less than threshhold
+            +1: vacancy-free months equal to threshhold
+            +2: vacancy-free months greather than threshhold
+    """
+
+    f.gamma[x] = 5
+
+    f.nv[x] = (level == -1) * (f.gamma[x] - 1) + \
+              (level == +1) * f.gamma[x] + \
+              (level == +2) * (f.gamma[x] + 1)
+
+def test_adjust_wages():
+
+    # Test Cases:
+    #
+    # Notes:
+    # - vacancy-free count is for last month (doesn't include "next month")
+    # - vacancy-free can never be (>= thresh) AND (NOT > 0) therefore these
+    #   cases are not included in the set of test cases
+    #
+    # vacancy-free last month:
+    # - 0: zero vacancy free months
+    # - <: vacancy-free months > 0 AND < threshhold (gamma)
+    # - =: vacancy-free months = threshold (gamma)
+    # - >: vacancy-free months > threshold (gamma)
+    #
+    # Case #                              00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23
+    # INPUT STATE:
+    # inventory (<l/=l/>l)                <l <l <l <l <l <l <l <l =l =l =l =l =l =l =l =l >l >l >l >l >l >l >l >l
+    # vacancy-free - last month (0/</=/>)  0  0  <  <  =  =  >  >  0  0  <  <  =  =  >  >  0  0  <  <  =  =  >  >
+    # vacancy open - last month (T/F)      F  T  F  T  F  T  F  T  F  T  F  T  F  T  F  T  F  T  F  T  F  T  F  T
+    # OUTPUT/ACTIONS:                               *     *     *           *     *     *           *     *     *
+    # raise exception (T/F)                F  F  F  T  F  T  F  T  F  F  F  T  F  T  F  T  F  F  F  T  F  T  F  T
+    # vacancy open - next month (T/F)      T  T  T  T  T  T  T  T  F  F  F  F  F  F  F  F  F  F  F  F  F  F  F  F
+    # vacancy-free - next month (0/+)      0  0  0  0  0  0  0  0  +  +  +  +  +  +  +  +  +  +  +  +  +  +  +  +
+    # wage change (+/0/-)                  0  +  0  E  0  E  0  E  0  0  0  E  -  E  -  E  0  0  0  0  -  E  -  E
+
+    N = 24
+
+    # configure parameters for the test firms
+    inv_levels                = np.array([-2,-2,-2,-2,-2,-2,-2,-2,-1,-1,-1,-1,-1,-1,-1,-1, 0, 0, 0, 0,+1,+1,+2,+2])
+    vacancy_free_level        = np.array([ 0, 0,-1,-1,+1,+1,+2,+2, 0, 0,-1,-1,+1,+1,+2,+2, 0, 0,-1,-1,+1,+1,+2,+2])
+    vacancy_open_last_month   = np.array([ 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1])
+    # delta: wage % change upper bound
+    wage_delta                = np.full(N, 0.1)
+    # wages "last month"
+    wage = old_wage           = np.full(N, 5)
+
+    # define results
+    # vacancy-open next month: not currently tested (because adjust_wages doesn't modify vacancies)
+    vacancy_open_next_month   = np.array([ 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    # vacancy-free change: not currently tested (because adjust_wages doesn't modify vacancy-free months)
+    #    0: set to zero
+    #   +1: add one
+    vacancy_free_change       = np.array([ 0, 0, 0, 0, 0, 0, 0, 0,+1,+1,+1,+1,+1,+1,+1,+1,+1,+1,+1,+1,+1,+1,+1,+1])
+    # expected wage change
+    #  +1: wage increases
+    #   0: wage remains unchanged
+    #  -1: wage decreases
+    #  -9: exception
+    wage_change               = np.array([ 0,+1, 0,-9, 0,-9, 0,-9, 0, 0, 0,-9,-1,-9,-1,-9, 0, 0, 0,-9,-1,-9,-1,-9])
+    # error cases
+    exception_expected = (wage_change == -9)
+
+    for x in range(N):
+        print(x)
+        f = firms.Firms(1)
+        # configure inventory level (inventory, demand, & bounds parameters)
+        configure_inventory_level(f, 0, inv_levels[x])
+        # vacancy last month
+        f.v[0] = vacancy_open_last_month[x]
+        # configure vacancy-free level (vacancy-free months & threshhold)
+        configure_vacancy_free_level(f, 0, vacancy_free_level[x])
+        # wage & delta
+        f.delta[0] = wage_delta[x]
+        f.w[0] = wage[x]
+
+        try:
+            f.adjust_wages()
+        except Exception as e:
+            assert exception_expected[x]
+        else:
+            if (wage_change[x] > 0):
+                assert old_wage[x] < f.w[0]
+            elif (wage_change[x] < 0):
+                assert old_wage[x] > f.w[0]
+            else: # (wage_change[x] == 0)
+                assert old_wage[x] == f.w[0]
 
 def test_adjust_workforce():
 
