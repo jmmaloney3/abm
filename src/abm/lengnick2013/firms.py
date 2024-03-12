@@ -14,12 +14,16 @@ class Firms:
         self.gamma = np.full(self.F, 24) # [Lengnick 2013] sets this to 24
         # firm wage max % change (delta_f)
         self.delta = np.full(self.F,0.019) # [Lengnick 2013] sets this to 0.019
+        # TODO: store inventory bounds as a 2-column matrix to allow both
+        #       bounds to be calculated using matrix multiplication
         # firm inventory upper bound - percentage of previous demand
         self.i_phi_upper = np.full(self.F, 1.0)  # [Lengnick 2013] sets this to 1
         # firm inventory lower bound - percentage of previous demand
         self.i_phi_lower = np.full(self.F, 0.25)  # [Lengnick 2013] sets this to 0.25
         # firm price max % change (nu_f)
         self.nu = np.full(self.F, 0.02)  # [Lengnick 2013] sets this to 0.02
+        # TODO: store price bounds as a 2-column matrix to allow both
+        #       bounds to be calculated using matrix multiplication
         # firm price upper bound - percentage of marginal costs
         self.p_phi_upper = np.full(self.F, 1.15)  # [Lengnick 2013] sets this to 1.15
         # firm price lower bound - percentage of marginal costs
@@ -230,5 +234,5 @@ class Firms:
 
         # change price if price change is accepted
         # - only change price if random # is less than theta
-        new_price_accepted = ((np.random.uniform(0, 1, self.F)) < self.theta)
+        new_price_accepted = ((np.random.uniform(0, 1, self.F)) <= self.theta)
         self.p = (new_price_accepted * new_p) + (~new_price_accepted * self.p)

@@ -217,7 +217,6 @@ def test_adjust_workforce():
     workforce_change      = np.array([ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1, 0,-1, 0])
 
     for x in range(N):
-        print(x)
         f = firms.Firms(1)
         # configure inventory level (inventory, demand, & bounds parameters)
         configure_inventory_level(f, 0, inv_levels[x])
@@ -233,6 +232,59 @@ def test_adjust_workforce():
         # check result
         assert f.v[0] == new_vacancy[x]
         assert f.l[0] == (workforce_size[x] + workforce_change[x])
+
+def test_price_change_type():
+    '''
+    Test that, given a particular inventory level, the correct type of
+    price change occurs.
+    '''
+    # Test Cases:
+    # Case #                      00   01   02   03   04
+    # INPUT STATE:
+    # inventory (<l/=l/0/=u/>u)  <lb  =lb  000  =ub  >ub
+    # OUTPUT/ACTIONS:
+    # price change (-/0/+)        -    0    0    0    +
+
+    N = 5
+
+    # configure parameters for the test firms
+    inv_levels       = np.array([ -2,  -1,   0,  +1,  +2])
+
+    # define results
+    price_change     =np.array([  +1,   0,   0,   0,  -1])
+
+    for x in range(N):
+        f = firms.Firms(1)
+        # configure inventory level (inventory, demand, & bounds parameters)
+        configure_inventory_level(f, 0, inv_levels[x])
+        # configure price max change %
+        f.nu[0] = 0.05
+        # configure probability of accepting price change
+        # - set to 100% to ensure that price change occurs
+        f.theta[0] = 1
+        # configure current price and remember for results checking
+        f.p[0] = old_p = 1
+
+        # configure marginal cost to be equal to current price
+        # -- marginal cost: f.w / f.t_lambda
+        f.w[0] = 1
+        f.t_lambda[0] = 1
+
+        # configure wide price bounds so they don't play a role in
+        # deteremining the price change
+        f.p_phi_upper[0] = 100 # new price can be 100 times as great as current price
+        f.p_phi_lower[0] = 0   # new price can be zero
+
+        # adjust workforce
+        f.adjust_prices()
+
+        # check result
+        if (price_change[x] < 0):
+            assert f.p[0] < old_p
+        elif (price_change[x] == 0):
+            assert f.p[0] == old_p
+        else: # (price_change > 0)
+            assert f.p[0] > old_p
 
 def test_adjust_prices():
 
